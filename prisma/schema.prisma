@@ -1,0 +1,156 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  kakaoId       String?   @unique
+
+  accounts      Account[]
+  sessions      Session[]
+  watchlists    Watchlist[]
+  alertSettings AlertSetting[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Account {
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([provider, providerAccountId])
+}
+
+model Session {
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String
+  expires    DateTime
+
+  @@id([identifier, token])
+}
+
+model Apartment {
+  id              String   @id @default(cuid())
+  name            String
+  address         String
+  sido            String
+  sigungu         String
+  dong            String
+  jibun           String?
+  roadAddress     String?
+  buildYear       Int?
+  totalUnits      Int?
+  totalFloors     Int?
+  parkingSpaces   Int?
+  floorAreaRatio  Float?
+  buildingCoverage Float?
+  heatingType     String?
+  latitude        Float?
+  longitude       Float?
+  regionCode      String
+
+  transactions    Transaction[]
+  watchlists      Watchlist[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([sido, sigungu, dong])
+  @@index([regionCode])
+  @@index([latitude, longitude])
+}
+
+model Transaction {
+  id              String   @id @default(cuid())
+  apartmentId     String
+  dealType        DealType
+  price           Int
+  rentPrice       Int?
+  area            Float
+  floor           Int
+  dealYear        Int
+  dealMonth       Int
+  dealDay         Int?
+  cancelDealDate  String?
+
+  apartment       Apartment @relation(fields: [apartmentId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([apartmentId])
+  @@index([dealYear, dealMonth])
+  @@index([dealType])
+  @@unique([apartmentId, dealType, price, area, floor, dealYear, dealMonth, dealDay])
+}
+
+enum DealType {
+  SALE
+  JEONSE
+  MONTHLY
+}
+
+model Watchlist {
+  id          String @id @default(cuid())
+  userId      String
+  apartmentId String
+
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  apartment   Apartment @relation(fields: [apartmentId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, apartmentId])
+}
+
+model AlertSetting {
+  id          String   @id @default(cuid())
+  userId      String
+  enabled     Boolean  @default(true)
+  dealTypes   DealType[]
+  minPrice    Int?
+  maxPrice    Int?
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Region {
+  code        String @id
+  sido        String
+  sigungu     String
+  dong        String
+  fullName    String
+
+  @@index([sido])
+  @@index([sido, sigungu])
+}
