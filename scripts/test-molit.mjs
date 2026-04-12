@@ -12,7 +12,7 @@ if (!apiKey || apiKey === "placeholder") {
 
 console.log("🔑 API Key:", apiKey.substring(0, 10) + "...");
 
-// 1. 실거래가 API — 강남구(11680) 최근 월
+// 1. 실거래가 API — 강남구(11680) 지난달
 const lastMonth = (() => {
   const d = new Date();
   d.setMonth(d.getMonth() - 1);
@@ -29,30 +29,31 @@ console.log(`\n=== 1. 아파트 매매 실거래가 (강남구 ${lastMonth}) ===
   url.searchParams.set("DEAL_YMD", lastMonth);
   url.searchParams.set("pageNo", "1");
   url.searchParams.set("numOfRows", "3");
-  url.searchParams.set("type", "json");
 
   try {
     const res = await fetch(url.toString());
     console.log("Status:", res.status);
-    const text = await res.text();
+    const xml = await res.text();
 
-    // 에러 응답은 XML로 오고, 정상은 JSON
-    if (text.startsWith("<")) {
-      const errMatch = text.match(/<returnAuthMsg>([^<]+)<\/returnAuthMsg>/);
-      const codeMatch = text.match(/<returnReasonCode>([^<]+)<\/returnReasonCode>/);
-      console.log("❌ 에러:", errMatch?.[1] ?? "unknown", codeMatch?.[1] ?? "");
-      console.log("원문:", text.substring(0, 500));
+    const resultCode = xml.match(/<resultCode>([^<]+)<\/resultCode>/)?.[1];
+    const resultMsg = xml.match(/<resultMsg>([^<]+)<\/resultMsg>/)?.[1];
+
+    if (resultCode !== "000") {
+      console.log(`❌ ${resultCode}: ${resultMsg}`);
+      console.log(xml.substring(0, 500));
     } else {
-      const data = JSON.parse(text);
-      const items = data?.response?.body?.items?.item;
-      const list = Array.isArray(items) ? items : items ? [items] : [];
-      console.log(`✅ ${list.length}건 조회 성공`);
-      if (list[0]) {
+      const totalCount = xml.match(/<totalCount>([^<]+)<\/totalCount>/)?.[1];
+      const items = [...xml.matchAll(/<item>([\s\S]*?)<\/item>/g)];
+      console.log(`✅ totalCount=${totalCount}, 조회 ${items.length}건`);
+      if (items[0]) {
+        const f = (k) =>
+          items[0][1].match(new RegExp(`<${k}>([^<]*)<\\/${k}>`))?.[1]?.trim();
         console.log("샘플:", {
-          아파트명: list[0].aptName,
-          거래금액: list[0].dealAmount,
-          면적: list[0].excluUseAr,
-          층: list[0].floor,
+          아파트명: f("aptNm"),
+          거래금액: f("dealAmount") + "만원",
+          면적: f("excluUseAr") + "㎡",
+          층: f("floor"),
+          지역: `${f("sggCd")}/${f("umdCd")} ${f("umdNm")}`,
         });
       }
     }
@@ -61,13 +62,14 @@ console.log(`\n=== 1. 아파트 매매 실거래가 (강남구 ${lastMonth}) ===
   }
 }
 
-// 2. 공동주택 단지 목록 (강남구 역삼동 1168010100)
+// 2. 공동주택 단지 목록 (역삼동 1168010100)
 console.log("\n=== 2. 공동주택 단지 목록 (역삼동 1168010100) ===");
 {
   const url = new URL(
-    "https://apis.data.go.kr/1613000/AptBasisInfoServiceV3/getLegaldongAptList"
+    "https://apis.data.go.kr/1613000/AptListService3/getLegaldongAptList3"
   );
   url.searchParams.set("serviceKey", apiKey);
+  url.searchParams.set("_type", "json");
   url.searchParams.set("bjdCode", "1168010100");
   url.searchParams.set("pageNo", "1");
   url.searchParams.set("numOfRows", "3");
@@ -75,19 +77,23 @@ console.log("\n=== 2. 공동주택 단지 목록 (역삼동 1168010100) ===");
   try {
     const res = await fetch(url.toString());
     console.log("Status:", res.status);
-    const text = await res.text();
-    const errMatch = text.match(/<returnAuthMsg>([^<]+)<\/returnAuthMsg>/);
-    if (errMatch && errMatch[1] !== "NORMAL SERVICE.") {
-      const codeMatch = text.match(/<returnReasonCode>([^<]+)<\/returnReasonCode>/);
-      console.log("❌ 에러:", errMatch[1], codeMatch?.[1] ?? "");
-      console.log("원문:", text.substring(0, 500));
+    const data = await res.json();
+    const code = data?.response?.header?.resultCode;
+    const msg = data?.response?.header?.resultMsg;
+
+    if (code !== "00") {
+      console.log(`❌ ${code}: ${msg}`);
+      console.log(JSON.stringify(data).substring(0, 500));
     } else {
-      const items = [...text.matchAll(/<item>([\s\S]*?)<\/item>/g)];
-      console.log(`✅ ${items.length}개 단지 조회 성공`);
+      const body = data.response.body;
+      const items = Array.isArray(body.items) ? body.items : [body.items];
+      console.log(`✅ totalCount=${body.totalCount}, 조회 ${items.length}개`);
       if (items[0]) {
-        const name = items[0][1].match(/<kaptName>([^<]+)<\/kaptName>/)?.[1];
-        const code = items[0][1].match(/<kaptCode>([^<]+)<\/kaptCode>/)?.[1];
-        console.log("샘플:", { 단지명: name, kaptCode: code });
+        console.log("샘플:", {
+          단지명: items[0].kaptName,
+          kaptCode: items[0].kaptCode,
+          위치: `${items[0].as1} ${items[0].as2} ${items[0].as3}`,
+        });
       }
     }
   } catch (e) {

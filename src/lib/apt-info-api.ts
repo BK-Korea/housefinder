@@ -1,221 +1,145 @@
 /**
- * 국토교통부_공동주택 단지 기본정보 제공 서비스
- * https://www.data.go.kr/data/15101324/openapi.do
+ * 국토교통부_공동주택 단지 목록제공 서비스
+ * https://www.data.go.kr/data/15060591/openapi.do
  *
- * 용도: 단지 상세정보 (세대수, 주차대수, 난방방식, 용적률, 건폐율, 건축년도)
- * 단지 식별자: kaptCode (k-apt 코드) — 실거래가 API에는 이 코드가 없으므로
- * 단지명 + 법정동 + 지번으로 단지 목록을 먼저 받아와 매칭해야 함
+ * End Point: https://apis.data.go.kr/1613000/AptListService3
+ * 응답 포맷: JSON (resultCode "00" = 정상)
+ *
+ * 이 API는 단지 코드(kaptCode)와 단지명만 제공하는 "목록" 서비스입니다.
+ * 세대수/주차대수/난방방식/용적률 등 상세 정보는 별도 API 필요:
+ *   - 국토교통부_공동주택 단지 기본 정보
+ *   - 국토교통부_공동주택 단지 상세 정보
  */
 
-const API_BASE = "https://apis.data.go.kr/1613000/AptBasisInfoServiceV3";
+const API_BASE = "https://apis.data.go.kr/1613000/AptListService3";
 
-interface RawAphusBassInfo {
-  kaptCode: string; // 단지코드
+export interface AptListItem {
+  kaptCode: string; // 단지 코드 (예: A10020216)
   kaptName: string; // 단지명
-  kaptAddr: string; // 법정동주소
-  doroJuso?: string; // 도로명주소
-  kaptTarea?: string; // 관리면적
-  kaptMarea?: string; // 전용면적합
-  kaptUsedate?: string; // 사용승인일 (YYYYMMDD)
-  kaptDongCnt?: string; // 동수
-  kaptdaCnt?: string; // 세대수
-  kaptBcompany?: string; // 시공사
-  kaptAcompany?: string; // 시행사
-  kaptTel?: string; // 관리사무소 연락처
-  codeHeat?: string; // 난방방식 (지역난방/개별난방/중앙난방)
-  codeHallNm?: string; // 복도유형 (계단식/복도식/혼합식)
-  codeMgrNm?: string; // 관리방식
-  codeSaleNm?: string; // 분양형태
-  privArea?: string; // 전용면적
-  kaptdEcapa?: string; // 계약전력
-  kaptdWtimebus?: string; // 버스 소요시간
-  kaptdWtimesub?: string; // 지하철 소요시간
-  subwayLine?: string; // 지하철호선
-  subwayStation?: string; // 지하철역
-  convenientFacility?: string;
-  educationFacility?: string;
+  bjdCode?: string; // 법정동 코드 (10자리)
+  as1?: string; // 시도 (예: 서울특별시)
+  as2?: string; // 시군구 (예: 강남구)
+  as3?: string; // 읍면동 (예: 역삼동)
+  as4?: string | null; // 리 (해당 시)
 }
 
-interface RawAphusDtlInfo {
-  kaptCode: string;
-  kaptName: string;
-  kaptdPcnt?: string; // 지상주차대수
-  kaptdPcntu?: string; // 지하주차대수
-  kaptdCccnt?: string; // CCTV대수
-  welfareFacility?: string;
-  kaptdWtimebus?: string;
-  subwayLine?: string;
-  subwayStation?: string;
-  kaptdWtimesub?: string;
-  convenientFacility?: string;
-  educationFacility?: string;
-  groundElChargerCnt?: string; // 지상 전기차 충전기
-  undergroundElChargerCnt?: string; // 지하 전기차 충전기
-}
-
-export interface AptBasicInfo {
-  kaptCode: string;
-  name: string;
-  address: string;
-  roadAddress?: string;
-  buildYear?: number;
-  totalDongs?: number; // 동수
-  totalUnits?: number; // 세대수
-  totalFloorArea?: number; // 연면적
-  heatingType?: string;
-  corridorType?: string;
-  builder?: string;
-  developer?: string;
-  managementTel?: string;
-}
-
-export interface AptDetailInfo {
-  kaptCode: string;
-  name: string;
-  parkingGround?: number;
-  parkingUnderground?: number;
-  parkingTotal?: number;
-  cctvCount?: number;
-  evChargerCount?: number;
-}
-
-/**
- * 공동주택 단지 기본정보 조회 (kaptCode 필수)
- */
-export async function fetchAptBasicInfo(
-  kaptCode: string
-): Promise<AptBasicInfo | null> {
-  const apiKey = process.env.MOLIT_API_KEY;
-  if (!apiKey) throw new Error("MOLIT_API_KEY is not set");
-
-  const url = new URL(`${API_BASE}/getAphusBassInfoV3`);
-  url.searchParams.set("serviceKey", apiKey);
-  url.searchParams.set("kaptCode", kaptCode);
-
-  const response = await fetch(url.toString());
-  if (!response.ok) {
-    throw new Error(`AptBasicInfo API error: ${response.status}`);
-  }
-
-  const xml = await response.text();
-  const item = parseXmlItem<RawAphusBassInfo>(xml);
-  if (!item) return null;
-
-  return {
-    kaptCode: item.kaptCode,
-    name: item.kaptName?.trim(),
-    address: item.kaptAddr?.trim(),
-    roadAddress: item.doroJuso?.trim(),
-    buildYear: item.kaptUsedate
-      ? parseInt(item.kaptUsedate.substring(0, 4), 10)
-      : undefined,
-    totalDongs: item.kaptDongCnt ? parseInt(item.kaptDongCnt, 10) : undefined,
-    totalUnits: item.kaptdaCnt ? parseInt(item.kaptdaCnt, 10) : undefined,
-    totalFloorArea: item.kaptTarea ? parseFloat(item.kaptTarea) : undefined,
-    heatingType: item.codeHeat?.trim(),
-    corridorType: item.codeHallNm?.trim(),
-    builder: item.kaptBcompany?.trim(),
-    developer: item.kaptAcompany?.trim(),
-    managementTel: item.kaptTel?.trim(),
+interface RawListResponse {
+  response: {
+    header: { resultCode: string; resultMsg: string };
+    body: {
+      items: AptListItem[] | AptListItem | "" | null;
+      numOfRows: number;
+      pageNo: number;
+      totalCount: number;
+    };
   };
 }
 
-/**
- * 공동주택 단지 상세정보 조회 (주차/CCTV/편의시설)
- */
-export async function fetchAptDetailInfo(
-  kaptCode: string
-): Promise<AptDetailInfo | null> {
+async function fetchAptList(
+  operation: string,
+  params: Record<string, string>
+): Promise<AptListItem[]> {
   const apiKey = process.env.MOLIT_API_KEY;
   if (!apiKey) throw new Error("MOLIT_API_KEY is not set");
 
-  const url = new URL(`${API_BASE}/getAphusDtlInfoV3`);
+  const url = new URL(`${API_BASE}/${operation}`);
   url.searchParams.set("serviceKey", apiKey);
-  url.searchParams.set("kaptCode", kaptCode);
+  url.searchParams.set("_type", "json");
+  for (const [k, v] of Object.entries(params)) {
+    url.searchParams.set(k, v);
+  }
 
   const response = await fetch(url.toString());
   if (!response.ok) {
-    throw new Error(`AptDetailInfo API error: ${response.status}`);
+    throw new Error(`AptListService3 ${operation} HTTP ${response.status}`);
   }
 
-  const xml = await response.text();
-  const item = parseXmlItem<RawAphusDtlInfo>(xml);
-  if (!item) return null;
+  const data = (await response.json()) as RawListResponse;
+  const header = data?.response?.header;
+  if (!header || header.resultCode !== "00") {
+    throw new Error(
+      `AptListService3 ${operation} error ${header?.resultCode}: ${header?.resultMsg}`
+    );
+  }
 
-  const parkingGround = item.kaptdPcnt ? parseInt(item.kaptdPcnt, 10) : 0;
-  const parkingUnderground = item.kaptdPcntu
-    ? parseInt(item.kaptdPcntu, 10)
-    : 0;
-
-  return {
-    kaptCode: item.kaptCode,
-    name: item.kaptName?.trim(),
-    parkingGround,
-    parkingUnderground,
-    parkingTotal: parkingGround + parkingUnderground,
-    cctvCount: item.kaptdCccnt ? parseInt(item.kaptdCccnt, 10) : undefined,
-    evChargerCount:
-      (item.groundElChargerCnt ? parseInt(item.groundElChargerCnt, 10) : 0) +
-      (item.undergroundElChargerCnt
-        ? parseInt(item.undergroundElChargerCnt, 10)
-        : 0),
-  };
+  const items = data.response.body.items;
+  if (!items) return [];
+  if (typeof items === "string") return [];
+  return Array.isArray(items) ? items : [items];
 }
 
 /**
- * 법정동 코드로 단지 목록 조회 (kaptCode 획득용)
- * 실거래가 → kaptCode 매칭할 때 사용
+ * 법정동코드로 단지 목록 조회
+ * @param bjdCode 10자리 법정동 코드 (예: "1168010100" = 서울 강남구 역삼동)
  */
 export async function fetchAptListByBjdCode(
-  bjdCode: string // 10자리 법정동 코드
-): Promise<Array<{ kaptCode: string; kaptName: string; bjdCode: string }>> {
-  const apiKey = process.env.MOLIT_API_KEY;
-  if (!apiKey) throw new Error("MOLIT_API_KEY is not set");
-
-  const url = new URL(`${API_BASE}/getLegaldongAptList`);
-  url.searchParams.set("serviceKey", apiKey);
-  url.searchParams.set("bjdCode", bjdCode);
-  url.searchParams.set("pageNo", "1");
-  url.searchParams.set("numOfRows", "9999");
-
-  const response = await fetch(url.toString());
-  if (!response.ok) {
-    throw new Error(`LegaldongAptList API error: ${response.status}`);
-  }
-
-  const xml = await response.text();
-  const items = parseXmlItems<{
-    kaptCode: string;
-    kaptName: string;
-    bjdCode: string;
-  }>(xml);
-
-  return items.map((i) => ({
-    kaptCode: i.kaptCode?.trim(),
-    kaptName: i.kaptName?.trim(),
-    bjdCode: i.bjdCode?.trim(),
-  }));
+  bjdCode: string,
+  pageNo = 1,
+  numOfRows = 9999
+): Promise<AptListItem[]> {
+  return fetchAptList("getLegaldongAptList3", {
+    bjdCode,
+    pageNo: String(pageNo),
+    numOfRows: String(numOfRows),
+  });
 }
 
-// ---- 간단한 XML 파서 (외부 의존성 없이) ----
-function parseXmlItem<T>(xml: string): T | null {
-  const items = parseXmlItems<T>(xml);
-  return items[0] ?? null;
+/**
+ * 시군구코드로 단지 목록 조회
+ * @param sigunguCode 5자리 시군구 코드 (예: "11680" = 서울 강남구)
+ */
+export async function fetchAptListBySigunguCode(
+  sigunguCode: string,
+  pageNo = 1,
+  numOfRows = 9999
+): Promise<AptListItem[]> {
+  return fetchAptList("getSigunguAptList3", {
+    sigunguCode,
+    pageNo: String(pageNo),
+    numOfRows: String(numOfRows),
+  });
 }
 
-function parseXmlItems<T>(xml: string): T[] {
-  const results: T[] = [];
-  const itemRegex = /<item>([\s\S]*?)<\/item>/g;
-  let match;
-  while ((match = itemRegex.exec(xml)) !== null) {
-    const itemXml = match[1];
-    const obj: Record<string, string> = {};
-    const fieldRegex = /<(\w+)>([\s\S]*?)<\/\1>/g;
-    let fieldMatch;
-    while ((fieldMatch = fieldRegex.exec(itemXml)) !== null) {
-      obj[fieldMatch[1]] = fieldMatch[2];
-    }
-    results.push(obj as T);
-  }
-  return results;
+/**
+ * 시도코드로 단지 목록 조회
+ * @param sidoCode 2자리 시도 코드 (예: "11" = 서울)
+ */
+export async function fetchAptListBySidoCode(
+  sidoCode: string,
+  pageNo = 1,
+  numOfRows = 9999
+): Promise<AptListItem[]> {
+  return fetchAptList("getSidoAptList3", {
+    sidoCode,
+    pageNo: String(pageNo),
+    numOfRows: String(numOfRows),
+  });
+}
+
+/**
+ * 도로명코드로 단지 목록 조회
+ */
+export async function fetchAptListByRoadnameCode(
+  roadCode: string,
+  pageNo = 1,
+  numOfRows = 9999
+): Promise<AptListItem[]> {
+  return fetchAptList("getRoadnameAptList3", {
+    roadCode,
+    pageNo: String(pageNo),
+    numOfRows: String(numOfRows),
+  });
+}
+
+/**
+ * 전국 공동주택 단지 목록 (페이지네이션 필수)
+ */
+export async function fetchAllAptList(
+  pageNo = 1,
+  numOfRows = 9999
+): Promise<AptListItem[]> {
+  return fetchAptList("getTotalAptList3", {
+    pageNo: String(pageNo),
+    numOfRows: String(numOfRows),
+  });
 }

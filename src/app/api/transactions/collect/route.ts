@@ -2,13 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import {
   fetchApartmentSaleTransactions,
-  fetchApartmentRentTransactions,
   parseSaleTransaction,
-  parseRentTransaction,
 } from "@/lib/molit-api";
 
 /**
- * Vercel Cron Job - 실거래 데이터 수집
+ * Vercel Cron Job - 실거래 데이터 수집 (매매 전용)
  * 매일 2회 실행: 오전 9시, 오후 6시
  */
 export async function GET(request: NextRequest) {
@@ -73,7 +71,7 @@ export async function GET(request: NextRequest) {
 
         // 중복 체크 후 삽입
         try {
-          const tx = await prisma.transaction.create({
+          await prisma.transaction.create({
             data: {
               apartmentId: apartment.id,
               dealType: "SALE",
@@ -104,59 +102,6 @@ export async function GET(request: NextRequest) {
         }
       }
 
-      // 전세/월세 데이터 수집
-      const rentRaw = await fetchApartmentRentTransactions(
-        regionCode,
-        yearMonth
-      );
-
-      for (const raw of rentRaw) {
-        const parsed = parseRentTransaction(raw);
-
-        const apartment = await prisma.apartment.findFirst({
-          where: {
-            regionCode: { startsWith: regionCode.substring(0, 5) },
-            name: parsed.aptName,
-            dong: parsed.dong,
-          },
-        });
-
-        if (!apartment) continue;
-
-        try {
-          await prisma.transaction.create({
-            data: {
-              apartmentId: apartment.id,
-              dealType: parsed.dealType,
-              price: parsed.deposit,
-              rentPrice:
-                parsed.dealType === "MONTHLY"
-                  ? parsed.monthlyRent
-                  : null,
-              area: parsed.area,
-              floor: parsed.floor,
-              dealYear: parsed.dealYear,
-              dealMonth: parsed.dealMonth,
-              dealDay: parsed.dealDay,
-            },
-          });
-
-          totalCollected++;
-          newTransactions.push({
-            apartmentId: apartment.id,
-            apartmentName: apartment.name,
-            dealType: parsed.dealType,
-            price: parsed.deposit,
-            area: parsed.area,
-            floor: parsed.floor,
-            dealYear: parsed.dealYear,
-            dealMonth: parsed.dealMonth,
-            dealDay: parsed.dealDay,
-          });
-        } catch {
-          // duplicate, skip
-        }
-      }
     } catch (error) {
       console.error(`Failed to collect for region ${regionCode}:`, error);
     }
