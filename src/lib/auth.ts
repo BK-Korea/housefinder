@@ -13,7 +13,7 @@ export const authConfig: NextAuthConfig = {
       authorization: {
         url: "https://kauth.kakao.com/oauth/authorize",
         params: {
-          scope: "profile_nickname profile_image account_email talk_message",
+          scope: "profile_nickname profile_image talk_message",
         },
       },
       token: "https://kauth.kakao.com/oauth/token",
@@ -21,12 +21,14 @@ export const authConfig: NextAuthConfig = {
       clientId: process.env.KAKAO_CLIENT_ID,
       clientSecret: process.env.KAKAO_CLIENT_SECRET,
       profile(profile) {
+        const kakaoId = String(profile.id);
         return {
-          id: String(profile.id),
-          name: profile.kakao_account?.profile?.nickname,
-          email: profile.kakao_account?.email,
+          id: kakaoId,
+          name: profile.kakao_account?.profile?.nickname ?? `user_${kakaoId}`,
+          // 개인 카카오 앱은 이메일 권한이 없으므로 kakaoId 기반 가상 이메일 생성
+          email: profile.kakao_account?.email ?? `${kakaoId}@kakao.user`,
           image: profile.kakao_account?.profile?.thumbnail_image_url,
-          kakaoId: String(profile.id),
+          kakaoId,
         };
       },
     },
