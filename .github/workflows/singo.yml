@@ -1,0 +1,43 @@
+name: 신고가 분석 CSV 생성
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/singo.yml"
+      - "scripts/singo.mjs"
+
+permissions:
+  contents: write
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 코드 체크아웃
+        uses: actions/checkout@v4
+        with:
+          ref: claude/real-estate-alerts-mSWdz
+
+      - name: Node.js 설정
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: 신고가 분석 실행
+        run: node scripts/singo.mjs
+
+      - name: CSV 아티팩트 업로드
+        uses: actions/upload-artifact@v4
+        with:
+          name: 신고가분석_서울경기
+          path: "신고가분석_서울경기.csv"
+          if-no-files-found: warn
+
+      - name: CSV를 리포에 커밋
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add "신고가분석_서울경기.csv" || true
+          git commit -m "chore: 신고가 분석 결과 CSV 갱신" || echo "변경 없음 — 커밋 생략"
+          git push origin claude/real-estate-alerts-mSWdz || echo "푸시할 변경 없음"
